@@ -17,6 +17,12 @@ FILL = "fill"
 BACKGROUND = "background"
 DISC_QUARTER_SEGMENTS = 128
 NUMERICAL_NOISE_MM2 = 1e-3  # slivers from regrowing curves as polygons, not real features
+# Larger loose pieces are left alone: checking them is slow and any thin part gets reported.
+LARGEST_SLIVER_DOTS = 8
+# Every sharp corner leaves a tip of at most ~0.06 mm² that the check cannot tell apart from
+# a real problem; a needle or strip the printer would actually botch is several times larger.
+NOTICEABLE_SPOT_MM2 = 0.1
+BORDER_TOLERANCE_MM = 1e-4  # how close two edges must be to count as a shared border
 
 
 @dataclass(frozen=True)
@@ -44,23 +50,56 @@ def lid_layers(outline: BaseGeometry, scale: float, style: Style, lid: LidSpec) 
     *inner_layers, outermost = text_layers(outline, scale, style, lid)
     disc = Point(0, 0).buffer(lid.radius_mm, quad_segs=DISC_QUARTER_SEGMENTS)
     background = disc.difference(unary_union([layer.shape for layer in [*inner_layers, outermost]]))
-    # Specks of background left in tiny pockets cannot be printed; the outermost ring takes them.
-    specks = _unprintable_specks(background, lid)
-    outermost = replace(outermost, shape=outermost.shape.union(specks))
-    background_layer = Layer(BACKGROUND, background.difference(specks), style.background_colour)
-    return [*inner_layers, outermost, background_layer]
+    # Strips of background in tight pockets cannot be printed; the outermost ring takes them.
+    strips = _narrow_parts(background, lid)
+    outermost = replace(outermost, shape=outermost.shape.union(strips))
+    background_layer = Layer(BACKGROUND, background.difference(strips), style.background_colour)
+    return _without_unprintable_islands([*inner_layers, outermost, background_layer], lid)
 
 
-def _unprintable_specks(shape: BaseGeometry, lid: LidSpec) -> BaseGeometry:
-    """Parts narrower than a printable line, plus the islands that cutting those off leaves behind.
+def _narrow_parts(shape: BaseGeometry, lid: LidSpec) -> BaseGeometry:
+    """Parts narrower than a printable line.
 
     Only these spots change; the rest of the boundary keeps its points, so files stay small."""
     radius = lid.min_line_mm / 2
     narrow = shape.difference(shape.buffer(-radius).buffer(radius))
-    narrow = unary_union([piece for piece in _pieces(narrow) if piece.area > NUMERICAL_NOISE_MM2])
-    smallest_dot_mm2 = math.pi * lid.min_line_mm**2  # a dot two nozzle widths across
-    islands = [piece for piece in _pieces(shape.difference(narrow)) if piece.area < smallest_dot_mm2]
-    return unary_union([narrow, *islands])
+    return unary_union([piece for piece in _pieces(narrow) if piece.area > NUMERICAL_NOISE_MM2])
+
+
+def _without_unprintable_islands(layers: list[Layer], lid: LidSpec) -> list[Layer]:
+    """Hands every loose piece too small or thin to print to the layer that surrounds it most."""
+    shapes = [layer.shape for layer in layers]
+    for index in range(len(shapes)):
+        for island in _unprintable_islands(shapes[index], lid):
+            others = [other for other in range(len(shapes)) if other != index]
+            neighbour = max(others, key=lambda other: _shared_border_mm(island, shapes[other]))
+            shapes[index] = shapes[index].difference(island)
+            shapes[neighbour] = shapes[neighbour].union(island)
+    return [replace(layer, shape=shape) for layer, shape in zip(layers, shapes, strict=True)]
+
+
+def _unprintable_islands(shape: BaseGeometry, lid: LidSpec) -> list[BaseGeometry]:
+    """Loose pieces that are too small to print, or that the thin-spot check would flag.
+
+    Too small: the printable core is under a dot two nozzle widths across. Too thin: more
+    than a corner tip of it is narrower than one line, as in a sliver trapped in a pocket."""
+    smallest_dot_mm2 = math.pi * lid.min_line_mm**2
+    candidates = [piece for piece in _pieces(shape) if piece.area < LARGEST_SLIVER_DOTS * smallest_dot_mm2]
+    return [piece for piece in candidates if _is_unprintable(piece, smallest_dot_mm2, lid)]
+
+
+def _is_unprintable(piece: BaseGeometry, smallest_dot_mm2: float, lid: LidSpec) -> bool:
+    core_mm2 = _printable_core(piece, lid).area
+    return core_mm2 < smallest_dot_mm2 or piece.area - core_mm2 > NOTICEABLE_SPOT_MM2
+
+
+def _printable_core(shape: BaseGeometry, lid: LidSpec) -> BaseGeometry:
+    radius = lid.min_line_mm / 2
+    return shape.buffer(-radius).buffer(radius)
+
+
+def _shared_border_mm(island: BaseGeometry, shape: BaseGeometry) -> float:
+    return shape.boundary.intersection(island.buffer(BORDER_TOLERANCE_MM)).length
 
 
 def _pieces(shape: BaseGeometry) -> list[BaseGeometry]:

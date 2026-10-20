@@ -2,11 +2,7 @@
 
 from shapely.geometry.base import BaseGeometry
 
-from tock_lid.design.layers import Layer
-
-# Every sharp corner leaves a tip of at most ~0.06 mm² that the check cannot tell apart from
-# a real problem; a needle or strip the printer would actually botch is several times larger.
-NOTICEABLE_SPOT_MM2 = 0.1
+from tock_lid.design.layers import NOTICEABLE_SPOT_MM2, Layer
 
 
 def largest_thin_spot_mm2(shape: BaseGeometry, min_line_mm: float) -> float:

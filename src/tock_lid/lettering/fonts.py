@@ -1,8 +1,12 @@
-"""Catalogue of macOS system fonts that print well as outlined lid text."""
+"""Catalogue of fonts that print well as outlined lid text.
+
+Three free fonts ship with the package and work everywhere; the rest are macOS system fonts
+that are only offered on a computer that has them."""
 
 from dataclasses import dataclass
 from pathlib import Path
 
+BUNDLED = Path(__file__).parent.parent / "fonts"
 SUPPLEMENTAL = Path("/System/Library/Fonts/Supplemental")
 SYSTEM = Path("/System/Library/Fonts")
 
@@ -14,8 +18,23 @@ class FontFace:
     index: int = 0  # face number inside a .ttc collection
     uppercase: bool = False
 
+    @property
+    def is_bundled(self) -> bool:
+        return self.path.is_relative_to(BUNDLED)
+
+    @property
+    def is_available(self) -> bool:
+        return self.path.is_file()
+
 
 CATALOGUE: dict[str, FontFace] = {
+    # Free (SIL Open Font License), shipped in tock_lid/fonts
+    "playball": FontFace("Playball", BUNDLED / "playball" / "Playball-Regular.ttf"),
+    "norican": FontFace("Norican", BUNDLED / "norican" / "Norican-Regular.ttf"),
+    "spectral-extrabold-italic": FontFace(
+        "Spectral ExtraBold Italic", BUNDLED / "spectral" / "Spectral-ExtraBoldItalic.ttf"
+    ),
+    # macOS system fonts
     "bodoni": FontFace("Bodoni 72 Bold", SUPPLEMENTAL / "Bodoni 72.ttc", 2),
     "bodoni-caps": FontFace("Bodoni 72 Bold, capitals", SUPPLEMENTAL / "Bodoni 72.ttc", 2, uppercase=True),
     "bodoni-italic": FontFace("Bodoni 72 Book Italic", SUPPLEMENTAL / "Bodoni 72.ttc", 1),
@@ -47,12 +66,25 @@ CATALOGUE: dict[str, FontFace] = {
 }
 
 
+def available_fonts() -> dict[str, FontFace]:
+    """The catalogue entries whose font file exists on this computer."""
+    return {key: font for key, font in CATALOGUE.items() if font.is_available}
+
+
 def find_font(key: str) -> FontFace:
-    try:
-        return CATALOGUE[key]
-    except KeyError:
-        known = ", ".join(CATALOGUE)
-        raise ValueError(f"Unknown font '{key}'. Known fonts: {known}") from None
+    font = CATALOGUE.get(key)
+    if font is not None and font.is_available:
+        return font
+    here = ", ".join(available_fonts())
+    if font is not None:
+        raise ValueError(f"'{key}' is a macOS font and is not on this computer. Available here: {here}")
+    raise ValueError(f"Unknown font '{key}'. Available here: {here}")
+
+
+def file_label(font_key: str) -> str:
+    """Short font name for file names: the part before the first dash, e.g. 'hoefler'."""
+    before_dash, _, _ = font_key.partition("-")
+    return before_dash.lower()
 
 
 def font_from_file(path: Path, index: int = 0) -> FontFace:
