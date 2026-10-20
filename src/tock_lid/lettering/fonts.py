@@ -58,9 +58,7 @@ CATALOGUE: dict[str, FontFace] = {
     "signpainter": FontFace("SignPainter Semibold", SUPPLEMENTAL / "SignPainter.ttc", 1),
     "brushscript": FontFace("Brush Script", SUPPLEMENTAL / "Brush Script.ttf"),
     "chancery": FontFace("Apple Chancery", SUPPLEMENTAL / "Apple Chancery.ttf"),
-    "trattatello": FontFace("Trattatello", SUPPLEMENTAL / "Trattatello.ttf"),
     "luminari": FontFace("Luminari", SUPPLEMENTAL / "Luminari.ttf"),
-    "herculanum": FontFace("Herculanum", SUPPLEMENTAL / "Herculanum.ttf"),
     "optima-black": FontFace("Optima ExtraBlack", SYSTEM / "Optima.ttc", 4),
     "futura-condensed": FontFace("Futura Condensed ExtraBold", SUPPLEMENTAL / "Futura.ttc", 4),
 }
