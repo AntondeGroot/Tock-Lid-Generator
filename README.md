@@ -102,7 +102,7 @@ Options shared by all commands that build lids:
 | `--words` | `Keezen Tock Toc` | one lid per word; all words get the same letter size |
 | `--diameter` | `122.4` | diameter of the insert in mm |
 | `--margin` | `5` | clearance between the text and the edge in mm |
-| `--thickness` | `1.0` | depth of the STL parts in mm: the top face is at z = 0 and they go down to −thickness |
+| `--thickness` | `0.8` | depth of the STL parts in mm: the top face is at z = 0 and they go down to −thickness |
 
 ## Printability
 
