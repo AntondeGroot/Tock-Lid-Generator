@@ -5,7 +5,7 @@ from tock_lid.cli import main
 
 @pytest.mark.parametrize(
     ("option", "valid_example"),
-    [("--font", "bodoni"), ("--style", "double")],
+    [("--font", "playball"), ("--style", "double")],
 )
 def test_unknown_choice_exits_with_a_message_listing_the_valid_ones(option, valid_example):
     with pytest.raises(SystemExit) as exit_info:

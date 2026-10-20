@@ -6,12 +6,14 @@ from pathlib import Path
 
 from tock_lid.bundle import every_font_and_style, write_bundle
 from tock_lid.design import STYLES, LidSpec, find_style, thin_layers
-from tock_lid.export import overview_svg
+from tock_lid.export import overview_svg, write_svg
 from tock_lid.generator import LidSet, design_lids, write_lid_files
-from tock_lid.lettering import CATALOGUE, FontFace, find_font, font_from_file
+from tock_lid.lettering import FontFace, available_fonts, file_label, find_font, font_from_file
 from tock_lid.previews import overview_rows, write_preview_sheets
 
 DEFAULT_WORDS = ["Keezen", "Tock", "Toc"]
+# The favourite where it exists (macOS), otherwise the free font chosen to stand in for it.
+DEFAULT_FONT_CHOICES = ("snell", "playball")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -20,13 +22,14 @@ def main(argv: list[str] | None = None) -> None:
     args = _parser().parse_args(argv)
     try:
         args.command(args)
-    except ValueError as error:
+    except (ValueError, OSError) as error:  # bad input, or a folder that cannot be written
         raise SystemExit(f"error: {error}") from None
 
 
 def list_fonts(_args) -> None:
-    for key, font in CATALOGUE.items():
-        print(f"{key:30} {font.name}")
+    for key, font in available_fonts().items():
+        origin = "free, ships with tock-lid" if font.is_bundled else "macOS system font"
+        print(f"{key:30} {font.name:30} {origin}")
 
 
 def list_styles(_args) -> None:
@@ -35,11 +38,11 @@ def list_styles(_args) -> None:
 
 
 def generate(args) -> None:
-    lid = _lid_spec(args)
-    lid_set = LidSet(_chosen_font(args), find_style(args.style), tuple(args.words), lid)
+    lid, style = _lid_spec(args), find_style(args.style)
+    lid_set = LidSet(_chosen_font(args), style, tuple(args.words), lid)
     for word, layers in design_lids(lid_set).items():
-        folder = write_lid_files(word, layers, lid, args.out)
-        print(f"{word}: {folder}")
+        folder = write_lid_files(word, _font_label(args), layers, lid, args.out)
+        print(f"{word}: {folder.resolve()}")
         _warn_about_thin_parts(layers, lid)
 
 
@@ -47,24 +50,33 @@ def overview(args) -> None:
     lid = _lid_spec(args)
     rows = overview_rows(tuple(args.fonts), tuple(args.styles), tuple(args.words), lid)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(overview_svg(rows, lid))
-    print(args.out)
+    write_svg(args.out, overview_svg(rows, lid))
+    print(args.out.resolve())
 
 
 def docs(args) -> None:
     for path in write_preview_sheets(args.out, tuple(args.words), _lid_spec(args)):
-        print(path)
+        print(path.resolve())
 
 
 def bundle(args) -> None:
     write_bundle(args.out, every_font_and_style(), tuple(args.words), _lid_spec(args))
-    print(args.out)
+    print(args.out.resolve())
 
 
 def _chosen_font(args) -> FontFace:
     if args.font_file:
         return font_from_file(args.font_file, args.font_index)
     return find_font(args.font)
+
+
+def _font_label(args) -> str:
+    return file_label(args.font_file.stem if args.font_file else args.font)
+
+
+def _default_font_key() -> str:
+    fonts_here = available_fonts()
+    return next(key for key in DEFAULT_FONT_CHOICES if key in fonts_here)
 
 
 def _lid_spec(args) -> LidSpec:
@@ -90,7 +102,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _add_generate(commands) -> None:
     parser = commands.add_parser("generate", help="SVG and STL files per word and colour")
-    parser.add_argument("--font", default="bodoni", help="built-in font key, see 'tock-lid fonts'")
+    parser.add_argument("--font", default=_default_font_key(), help="font key, see 'tock-lid fonts'")
     parser.add_argument("--font-file", type=Path, help="any .ttf/.otf/.ttc instead of a built-in font")
     parser.add_argument("--font-index", type=int, default=0, help="face number inside a .ttc file")
     parser.add_argument("--style", default="standard", help="outline style, see 'tock-lid styles'")
@@ -101,7 +113,7 @@ def _add_generate(commands) -> None:
 
 def _add_overview(commands) -> None:
     parser = commands.add_parser("overview", help="one SVG sheet comparing fonts and styles")
-    parser.add_argument("--fonts", nargs="+", default=["bodoni"])
+    parser.add_argument("--fonts", nargs="+", default=[_default_font_key()])
     parser.add_argument("--styles", nargs="+", default=list(STYLES))
     parser.add_argument("--out", type=Path, default=Path("out/overview.svg"))
     _add_shared(parser)
@@ -127,4 +139,6 @@ def _add_shared(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--words", nargs="+", default=DEFAULT_WORDS, help="one lid per word")
     parser.add_argument("--diameter", type=float, default=defaults.diameter_mm, help="lid insert, mm")
     parser.add_argument("--margin", type=float, default=defaults.margin_mm, help="text to edge, mm")
-    parser.add_argument("--thickness", type=float, default=defaults.thickness_mm, help="STL height, mm")
+    parser.add_argument(
+        "--thickness", type=float, default=defaults.thickness_mm, help="STL depth below z = 0, mm"
+    )

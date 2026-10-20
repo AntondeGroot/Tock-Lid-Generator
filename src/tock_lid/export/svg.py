@@ -1,5 +1,7 @@
 """SVG documents in millimetres, centred on the lid so every file lines up on import."""
 
+from pathlib import Path
+
 from shapely.geometry.base import BaseGeometry
 
 from tock_lid.design.layers import Layer
@@ -19,6 +21,11 @@ def lid_svg(layers: list[Layer], lid: LidSpec, guide: bool = False) -> str:
         f'viewBox="{-half} {-half} {2 * half} {2 * half}">\n'
         f"{guide_circle}{layer_paths(layers)}</svg>\n"
     )
+
+
+def write_svg(path: Path, document: str) -> None:
+    """UTF-8 with Unix line endings, so a file is byte-identical on Windows, macOS and Linux."""
+    path.write_text(document, encoding="utf-8", newline="\n")
 
 
 def layer_paths(layers: list[Layer], decimals: int = PRINT_DECIMALS) -> str:

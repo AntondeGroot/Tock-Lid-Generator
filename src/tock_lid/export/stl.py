@@ -20,6 +20,9 @@ def write_stl(path: Path, shape: BaseGeometry, thickness_mm: float) -> trimesh.T
 
 
 def extrude(shape: BaseGeometry, thickness_mm: float) -> trimesh.Trimesh:
+    """The visible top face lies at z = 0 and the body goes down into the lid, to -thickness."""
     snapped = shapely.set_precision(shape, STL_GRID_MM)
     polygons = [p for p in getattr(snapped, "geoms", [snapped]) if p.area > MIN_PART_AREA_MM2]
-    return trimesh.util.concatenate([trimesh.creation.extrude_polygon(p, thickness_mm) for p in polygons])
+    mesh = trimesh.util.concatenate([trimesh.creation.extrude_polygon(p, thickness_mm) for p in polygons])
+    mesh.apply_translation((0, 0, -thickness_mm))
+    return mesh

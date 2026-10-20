@@ -5,7 +5,7 @@ from shapely.geometry import MultiPolygon, Point, Polygon, box
 from tock_lid.export import write_stl
 
 
-def test_written_stl_is_watertight_and_as_thick_as_requested(tmp_path):
+def test_written_stl_is_watertight_and_goes_down_from_z_zero_by_the_thickness(tmp_path):
     # Two separate parts, one with a hole, like the letters "l" and "o".
     letter_o = Point(30, 0).buffer(10).difference(Point(30, 0).buffer(4))
     shape = MultiPolygon([box(0, -10, 5, 10), letter_o])
@@ -16,7 +16,7 @@ def test_written_stl_is_watertight_and_as_thick_as_requested(tmp_path):
     mesh = trimesh.load(path)
     (_, _, bottom), (_, _, top) = mesh.bounds
     assert mesh.is_watertight
-    assert (bottom, top) == pytest.approx((0.0, 1.2))
+    assert (bottom, top) == pytest.approx((-1.2, 0.0))
     assert mesh.volume == pytest.approx(shape.area * 1.2, rel=1e-6)
 
 

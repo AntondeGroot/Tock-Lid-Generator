@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tock_lid.design import STYLES, LidSpec, find_style
-from tock_lid.export import OverviewRow, overview_svg
+from tock_lid.export import OverviewRow, overview_svg, write_svg
 from tock_lid.generator import LidSet, design_lids
 from tock_lid.lettering import CATALOGUE, find_font
 
-SHORTLIST = ("bodoni", "hoefler-black", "hoefler-black-italic", "bigcaslon", "superclarendon-black")
+# The favourites; the free fonts were chosen to stand in for them on other systems.
+MACOS_FAVOURITES = ("snell", "hoefler-black-italic", "bodoni")
 
 
 @dataclass(frozen=True)
@@ -17,19 +18,29 @@ class PreviewSheet:
     fonts: tuple[str, ...]
     styles: tuple[str, ...]
 
+    @property
+    def can_be_drawn_here(self) -> bool:
+        return all(CATALOGUE[key].is_available for key in self.fonts)
 
-PREVIEW_SHEETS = (
-    PreviewSheet("fonts.svg", tuple(CATALOGUE), ("standard",)),
-    PreviewSheet("styles.svg", SHORTLIST, tuple(STYLES)),
-)
+
+def preview_sheets() -> tuple[PreviewSheet, ...]:
+    """The README sheets, grouped by where their fonts work."""
+    everywhere = tuple(key for key, font in CATALOGUE.items() if font.is_bundled)
+    macos_only = tuple(key for key, font in CATALOGUE.items() if not font.is_bundled)
+    return (
+        PreviewSheet("fonts-everywhere.svg", everywhere, tuple(STYLES)),
+        PreviewSheet("fonts-macos.svg", macos_only, ("standard",)),
+        PreviewSheet("styles-macos.svg", MACOS_FAVOURITES, tuple(STYLES)),
+    )
 
 
 def write_preview_sheets(out_dir: Path, words: tuple[str, ...], lid: LidSpec) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     paths = []
-    for sheet in PREVIEW_SHEETS:
+    # A sheet needing fonts this computer lacks is skipped, not drawn half empty.
+    for sheet in (sheet for sheet in preview_sheets() if sheet.can_be_drawn_here):
         path = out_dir / sheet.file_name
-        path.write_text(overview_svg(overview_rows(sheet.fonts, sheet.styles, words, lid), lid))
+        write_svg(path, overview_svg(overview_rows(sheet.fonts, sheet.styles, words, lid), lid))
         paths.append(path)
     return paths
 

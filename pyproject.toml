@@ -27,6 +27,9 @@ tock-lid = "tock_lid.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+tock_lid = ["fonts/*/*.ttf", "fonts/*/OFL.txt"]
+
 [tool.ruff]
 line-length = 110
 target-version = "py311"

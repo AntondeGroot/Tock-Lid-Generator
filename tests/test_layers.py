@@ -3,6 +3,7 @@ from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 
 from tock_lid.design import STYLES, LidSpec, lid_layers, thin_layers
+from tock_lid.design.layers import Layer, _without_unprintable_islands
 
 LID = LidSpec()
 
@@ -50,3 +51,30 @@ def test_a_letter_hole_too_small_for_background_is_filled_by_the_outline():
 
     assert outline.shape.contains(Point(0, 0))
     assert background.shape.geom_type == "Polygon"
+
+
+def test_a_dot_too_small_to_print_joins_the_layer_that_surrounds_it():
+    dot = Point(5, 5).buffer(0.3)  # 0.6 mm across, below the 0.8 mm printable dot
+    inner_ring = Layer("outline-inner", box(0, 0, 10, 10).difference(dot), "#000")
+    gap = Layer("gap", unary_union([box(20, 0, 30, 10), dot]), "#fff")
+    outer_ring = Layer("outline-outer", box(10, 0, 20, 10), "#000")  # next door, but not around the dot
+
+    inner_ring, gap, outer_ring = _without_unprintable_islands([inner_ring, gap, outer_ring], LID)
+
+    assert inner_ring.shape.contains(Point(5, 5))
+    assert gap.shape.geom_type == "Polygon"
+    assert outer_ring.shape.area == pytest.approx(100)
+
+
+def test_a_thin_sliver_joins_the_layer_that_surrounds_it_even_if_its_core_could_print():
+    # 6 mm long, tapering from 0.7 mm wide to a point: the wide end could print on its own,
+    # but its tapering third (about 0.65 mm²) is narrower than one 0.4 mm line.
+    sliver = Polygon([(2, 0), (8, 0.35), (8, -0.35)])
+    inner_ring = Layer("outline-inner", box(0, -5, 10, 5).difference(sliver), "#000")
+    gap = Layer("gap", unary_union([box(20, -5, 30, 5), sliver]), "#fff")
+    outer_ring = Layer("outline-outer", box(10, -5, 20, 5), "#000")
+
+    inner_ring, gap, _ = _without_unprintable_islands([inner_ring, gap, outer_ring], LID)
+
+    assert inner_ring.shape.contains(Point(6, 0))
+    assert gap.shape.geom_type == "Polygon"

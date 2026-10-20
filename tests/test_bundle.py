@@ -13,22 +13,21 @@ def fake_outlines(monkeypatch):
     monkeypatch.setattr(generator, "word_outline", lambda _font, _word: box(0, 0, 300, 100))
 
 
-def test_bundle_has_a_preview_and_one_stl_per_colour_for_every_lid(tmp_path):
+def test_bundle_has_a_preview_and_one_stl_per_colour_named_after_word_and_font(tmp_path):
     zip_path = tmp_path / "lids.zip"
+    combinations = [("playball", "standard"), ("spectral-extrabold-italic", "double")]
 
-    write_bundle(zip_path, [("bodoni", "standard"), ("didot", "double")], ("Tock", "Toc"), LidSpec())
+    write_bundle(zip_path, combinations, ("Tock", "Toc"), LidSpec())
 
     names = set(ZipFile(zip_path).namelist())
-    assert "tock-lids/didot/double/toc/toc-preview.svg" in names
-    double_toc_stls = {
-        name.rsplit("/", 1)[1] for name in names if name.startswith("tock-lids/didot/double/toc/")
-    }
-    assert double_toc_stls >= {
-        "toc-fill.stl",
-        "toc-outline-inner.stl",
-        "toc-gap.stl",
-        "toc-outline-outer.stl",
-        "toc-background.stl",
+    folder = "tock-lids/spectral-extrabold-italic/double/toc/"
+    assert f"{folder}toc-spectral-preview.svg" in names
+    assert {name.removeprefix(folder) for name in names if name.startswith(folder)} >= {
+        "toc-spectral-fill.stl",
+        "toc-spectral-outline-inner.stl",
+        "toc-spectral-gap.stl",
+        "toc-spectral-outline-outer.stl",
+        "toc-spectral-background.stl",
     }
     lid_folders = {name.rsplit("/", 1)[0] for name in names if name.endswith(".stl")}
     assert len(lid_folders) == 2 * 2
